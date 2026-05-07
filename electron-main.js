@@ -7,6 +7,7 @@ const { autoUpdater } = require("electron-updater");
 const DASHBOARD_URL = "http://127.0.0.1:8000";
 let pyProc = null;
 let mainWindow = null;
+let backendStderr = "";
 let updateState = {
   status: "idle",
   message: "No update activity yet.",
@@ -87,6 +88,14 @@ function getBackendRoot() {
   return app.isPackaged ? path.join(process.resourcesPath, "backend") : __dirname;
 }
 
+function getBundledBackendExecutable() {
+  const backendRoot = getBackendRoot();
+  if (process.platform === "win32") {
+    return path.join(backendRoot, "poshshare-backend.exe");
+  }
+  return path.join(backendRoot, "poshshare-backend");
+}
+
 function getPythonCandidates() {
   if (process.platform === "win32") {
     return ["py", "python", "python3"];
@@ -146,19 +155,75 @@ async function startPythonServer() {
     dialog.showErrorBox("Poshshare startup error", errMsg);
     throw lastErr || new Error(errMsg);
   }
+}
+
+async function startBackendServer() {
+  if (app.isPackaged) {
+    const backendExe = getBundledBackendExecutable();
+    pyProc = spawn(backendExe, [], {
+      cwd: path.dirname(backendExe),
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      }, 250);
+      pyProc.once("spawn", () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+      pyProc.once("error", (err) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(err);
+        }
+      });
+    }).catch((err) => {
+      const reason = err?.message ? `\n\nDetails:\n${err.message}` : "";
+      dialog.showErrorBox(
+        "Poshshare startup error",
+        `Bundled backend executable not found or failed to start:\n${backendExe}${reason}`
+      );
+      throw err;
+    });
+    console.log(`Started bundled backend: ${backendExe}`);
+  } else {
+    await startPythonServer();
+  }
 
   pyProc.stdout.on("data", (buf) => {
     process.stdout.write(`[python] ${buf}`);
   });
 
   pyProc.stderr.on("data", (buf) => {
-    process.stderr.write(`[python] ${buf}`);
+    const chunk = String(buf);
+    backendStderr += chunk;
+    if (backendStderr.length > 6000) {
+      backendStderr = backendStderr.slice(-6000);
+    }
+    process.stderr.write(`[python] ${chunk}`);
   });
 
   pyProc.on("exit", (code) => {
     console.log(`Python server exited with code ${code}`);
     pyProc = null;
     if (!app.isQuitting) {
+      const reason = backendStderr.trim()
+        ? `\n\nDetails:\n${backendStderr.trim()}`
+        : "";
+      dialog.showErrorBox(
+        "Poshshare backend failed to start",
+        `The local backend process exited (code ${code ?? "unknown"}).` + reason
+      );
       app.quit();
     }
   });
@@ -284,7 +349,7 @@ app.on("before-quit", () => {
 app.whenReady().then(async () => {
   setupAutoUpdater();
   try {
-    await startPythonServer();
+    await startBackendServer();
     await waitForServer(DASHBOARD_URL);
     createWindow();
     sendUpdateState();

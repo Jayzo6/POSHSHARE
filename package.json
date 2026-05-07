@@ -1,11 +1,14 @@
 {
   "name": "poshshare-desktop",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "description": "Electron wrapper for Poshshare dashboard",
   "main": "electron-main.js",
   "scripts": {
     "electron": "electron .",
+    "build:backend": "node scripts/build-backend.js",
+    "predist": "npm run build:backend",
+    "prerelease": "npm run build:backend",
     "dist": "electron-builder --win nsis",
     "release": "electron-builder --win nsis --publish always"
   },
@@ -47,19 +50,10 @@
     ],
     "extraResources": [
       {
-        "from": ".",
+        "from": "dist_backend",
         "to": "backend",
         "filter": [
-          "server.py",
-          "dashboard.html",
-          "__init__.py",
-          "app_paths.py",
-          "automation.py",
-          "browser_manager.py",
-          "captcha_solver.py",
-          "login_handler.py",
-          "models.py",
-          "sharing_logic.py"
+          "poshshare-backend.exe"
         ]
       }
     ],

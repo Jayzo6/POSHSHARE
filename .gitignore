@@ -2,6 +2,7 @@ node_modules/
 browsers/
 bundled_browsers/
 dist/
+dist_backend/
 build/
 release/
 out/
