@@ -483,4 +483,5 @@ async def _start_bot(msg: dict):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False, log_level="info")
+    port = int(os.environ.get("POSHSHARE_PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=False, log_level="info")

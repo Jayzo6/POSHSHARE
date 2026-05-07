@@ -2,12 +2,14 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const http = require("http");
+const net = require("net");
 const { autoUpdater } = require("electron-updater");
 
-const DASHBOARD_URL = "http://127.0.0.1:8000";
+const DEFAULT_PORT = 8000;
 let pyProc = null;
 let mainWindow = null;
 let backendStderr = "";
+let backendPort = DEFAULT_PORT;
 let updateState = {
   status: "idle",
   message: "No update activity yet.",
@@ -16,6 +18,31 @@ let updateState = {
   percent: 0,
   error: null
 };
+
+function getDashboardUrl() {
+  return `http://127.0.0.1:${backendPort}`;
+}
+
+function probePort(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.on("error", () => resolve(false));
+    server.listen({ port, host: "127.0.0.1" }, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function pickBackendPort(startPort = DEFAULT_PORT, maxAttempts = 25) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const candidate = startPort + i;
+    // eslint-disable-next-line no-await-in-loop
+    const open = await probePort(candidate);
+    if (open) return candidate;
+  }
+  throw new Error(`No open backend port found from ${startPort} to ${startPort + maxAttempts - 1}`);
+}
 
 function sendUpdateState() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -105,8 +132,13 @@ function getPythonCandidates() {
 
 function spawnPythonServer(command, serverPath, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, [serverPath], {
+    const args = serverPath ? [serverPath] : [];
+    const child = spawn(command, args, {
       cwd,
+      env: {
+        ...process.env,
+        POSHSHARE_PORT: String(backendPort)
+      },
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -160,34 +192,7 @@ async function startPythonServer() {
 async function startBackendServer() {
   if (app.isPackaged) {
     const backendExe = getBundledBackendExecutable();
-    pyProc = spawn(backendExe, [], {
-      cwd: path.dirname(backendExe),
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    await new Promise((resolve, reject) => {
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          resolve();
-        }
-      }, 250);
-      pyProc.once("spawn", () => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          resolve();
-        }
-      });
-      pyProc.once("error", (err) => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          reject(err);
-        }
-      });
-    }).catch((err) => {
+    pyProc = await spawnPythonServer(backendExe, "", path.dirname(backendExe)).catch((err) => {
       const reason = err?.message ? `\n\nDetails:\n${err.message}` : "";
       dialog.showErrorBox(
         "Poshshare startup error",
@@ -248,7 +253,7 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadURL(DASHBOARD_URL);
+  mainWindow.loadURL(getDashboardUrl());
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -349,8 +354,9 @@ app.on("before-quit", () => {
 app.whenReady().then(async () => {
   setupAutoUpdater();
   try {
+    backendPort = await pickBackendPort();
     await startBackendServer();
-    await waitForServer(DASHBOARD_URL);
+    await waitForServer(getDashboardUrl());
     createWindow();
     sendUpdateState();
     checkForUpdates();
