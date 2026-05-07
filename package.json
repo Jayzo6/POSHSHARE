@@ -37,8 +37,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "jayzo6",
-        "repo": "poshshare-desktop"
+        "owner": "Jayzo6",
+        "repo": "POSHSHARE"
       }
     ]
   }
