@@ -254,7 +254,8 @@ class SharingLogic:
             except Exception:
                 share_count = 0
 
-            if i % 10 == 0 or share_count >= target_count:
+            # Avoid noisy/misleading "Found 0..." on the very first pass while the page is still settling.
+            if (i > 0 and i % 10 == 0) or share_count >= target_count:
                 self.log(f"    Found {share_count} shareable items...")
 
             if share_count >= target_count:
