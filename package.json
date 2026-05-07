@@ -1,6 +1,6 @@
 {
   "name": "poshshare-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Electron wrapper for Poshshare dashboard",
   "main": "electron-main.js",
@@ -20,10 +20,29 @@
     "appId": "com.poshshare.desktop",
     "productName": "Poshshare",
     "asar": true,
+    "compression": "maximum",
     "files": [
-      "**/*",
+      "electron-main.js",
+      "preload.js",
+      "package.json",
+      "node_modules/**/*",
       "!**/.git/**",
-      "!**/node_modules/.cache/**"
+      "!**/.cursor/**",
+      "!dist/**",
+      "!build/**",
+      "!release/**",
+      "!out/**",
+      "!browsers/**",
+      "!bundled_browsers/**",
+      "!**/__pycache__/**",
+      "!**/*.pyc",
+      "!**/*.pyo",
+      "!**/*.log",
+      "!**/*.md",
+      "!**/*.markdown",
+      "!**/*.map",
+      "!**/node_modules/.cache/**",
+      "!**/node_modules/**/{test,tests,__tests__,example,examples}/**"
     ],
     "extraResources": [
       {
