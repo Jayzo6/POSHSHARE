@@ -25,7 +25,26 @@
       "!**/.git/**",
       "!**/node_modules/.cache/**"
     ],
+    "extraResources": [
+      {
+        "from": ".",
+        "to": "backend",
+        "filter": [
+          "server.py",
+          "dashboard.html",
+          "__init__.py",
+          "app_paths.py",
+          "automation.py",
+          "browser_manager.py",
+          "captcha_solver.py",
+          "login_handler.py",
+          "models.py",
+          "sharing_logic.py"
+        ]
+      }
+    ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         "nsis"
       ]

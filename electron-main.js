@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const http = require("http");
@@ -83,16 +83,69 @@ function waitForServer(url, timeoutMs = 20000, intervalMs = 350) {
   });
 }
 
-function startPythonServer() {
-  const projectRoot = __dirname;
-  const serverPath = path.join(projectRoot, "server.py");
-  const pythonCmd = process.platform === "win32" ? "py" : "python3";
+function getBackendRoot() {
+  return app.isPackaged ? path.join(process.resourcesPath, "backend") : __dirname;
+}
 
-  pyProc = spawn(pythonCmd, [serverPath], {
-    cwd: projectRoot,
-    windowsHide: true,
-    stdio: ["ignore", "pipe", "pipe"]
+function getPythonCandidates() {
+  if (process.platform === "win32") {
+    return ["py", "python", "python3"];
+  }
+  return ["python3", "python"];
+}
+
+function spawnPythonServer(command, serverPath, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, [serverPath], {
+      cwd,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    let settled = false;
+    const onReady = () => {
+      if (settled) return;
+      settled = true;
+      resolve(child);
+    };
+
+    const timer = setTimeout(onReady, 250);
+
+    child.once("error", (err) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
+
+    child.once("spawn", onReady);
   });
+}
+
+async function startPythonServer() {
+  const projectRoot = getBackendRoot();
+  const serverPath = path.join(projectRoot, "server.py");
+  const candidates = getPythonCandidates();
+  let lastErr = null;
+
+  for (const cmd of candidates) {
+    try {
+      pyProc = await spawnPythonServer(cmd, serverPath, projectRoot);
+      console.log(`Started backend with command: ${cmd}`);
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (err && err.code !== "ENOENT") {
+        throw err;
+      }
+    }
+  }
+
+  if (!pyProc) {
+    const errMsg = "Python runtime not found. Install Python 3 and reopen the app.";
+    dialog.showErrorBox("Poshshare startup error", errMsg);
+    throw lastErr || new Error(errMsg);
+  }
 
   pyProc.stdout.on("data", (buf) => {
     process.stdout.write(`[python] ${buf}`);
@@ -226,8 +279,8 @@ app.on("before-quit", () => {
 
 app.whenReady().then(async () => {
   setupAutoUpdater();
-  startPythonServer();
   try {
+    await startPythonServer();
     await waitForServer(DASHBOARD_URL);
     createWindow();
     sendUpdateState();
