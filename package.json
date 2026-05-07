@@ -65,14 +65,14 @@
     ],
     "win": {
       "signAndEditExecutable": false,
-      "icon": "assets/icon.png",
+      "icon": "assets/icon.ico",
       "target": [
         "nsis"
       ]
     },
     "nsis": {
-      "installerIcon": "assets/icon.png",
-      "uninstallerIcon": "assets/icon.png",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
