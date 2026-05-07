@@ -1,6 +1,6 @@
 {
   "name": "poshshare-desktop",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "private": true,
   "description": "Electron wrapper for Poshshare dashboard",
   "main": "electron-main.js",
@@ -24,6 +24,7 @@
     "files": [
       "electron-main.js",
       "preload.js",
+      "assets/**/*",
       "package.json",
       "node_modules/**/*",
       "!**/.git/**",
@@ -64,11 +65,14 @@
     ],
     "win": {
       "signAndEditExecutable": false,
+      "icon": "assets/icon.png",
       "target": [
         "nsis"
       ]
     },
     "nsis": {
+      "installerIcon": "assets/icon.png",
+      "uninstallerIcon": "assets/icon.png",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },

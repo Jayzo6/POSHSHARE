@@ -85,6 +85,14 @@ nav{
   font-size:15px;font-weight:500;letter-spacing:-0.02em;
   text-decoration:none;color:var(--text);
 }
+.brand-version{
+  font-size:11px;
+  color:var(--text3);
+  border:1px solid var(--border2);
+  border-radius:999px;
+  padding:2px 7px;
+  font-family:var(--mono);
+}
 .brand-logo{
   width:28px;height:28px;border-radius:8px;
   background:linear-gradient(135deg,var(--accent2) 0%,var(--accent) 100%);
@@ -597,6 +605,7 @@ nav,.main,.modal-backdrop{position:relative;z-index:1}
   <a class="brand" href="#">
     <div class="brand-logo">P</div>
     Poshshare
+    <span class="brand-version" id="app-version">v—</span>
   </a>
   <div class="nav-tabs">
     <button class="nav-tab active" data-tab="sharing">Sharing</button>
@@ -944,9 +953,11 @@ function renderUpdateState(state) {
   const bannerText = document.getElementById('update-banner-text');
   const btnDownload = document.getElementById('btn-update-download');
   const btnInstall = document.getElementById('btn-update-install');
+  const appVersion = document.getElementById('app-version');
 
   text.textContent = state.error ? `${state.message} (${state.error})` : state.message;
   bar.style.width = `${Math.max(0, Math.min(100, state.percent || 0))}%`;
+  if (appVersion && state.currentVersion) appVersion.textContent = `v${state.currentVersion}`;
 
   btnDownload.style.display = state.status === 'available' ? '' : 'none';
   btnInstall.style.display = state.status === 'downloaded' ? '' : 'none';

@@ -165,6 +165,9 @@ async function startPythonServer() {
 }
 
 function createWindow() {
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, "assets", "icon.png")
+    : path.join(__dirname, "assets", "icon.png");
   mainWindow = new BrowserWindow({
     width: 1380,
     height: 900,
@@ -172,6 +175,7 @@ function createWindow() {
     minHeight: 720,
     backgroundColor: "#0d0d0f",
     autoHideMenuBar: true,
+    icon: iconPath,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
