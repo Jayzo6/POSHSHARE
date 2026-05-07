@@ -28,7 +28,7 @@ function probePort(port) {
     const server = net.createServer();
     server.unref();
     server.on("error", () => resolve(false));
-    server.listen({ port, host: "127.0.0.1" }, () => {
+    server.listen({ port, host: "0.0.0.0" }, () => {
       server.close(() => resolve(true));
     });
   });
@@ -354,9 +354,29 @@ app.on("before-quit", () => {
 app.whenReady().then(async () => {
   setupAutoUpdater();
   try {
-    backendPort = await pickBackendPort();
-    await startBackendServer();
-    await waitForServer(getDashboardUrl());
+    let started = false;
+    let attemptPort = DEFAULT_PORT;
+    for (let i = 0; i < 8; i++) {
+      backendPort = await pickBackendPort(attemptPort, 8);
+      backendStderr = "";
+      try {
+        await startBackendServer();
+        await waitForServer(getDashboardUrl(), 10000, 300);
+        started = true;
+        break;
+      } catch (err) {
+        const portBusy = /10048|address already in use/i.test(String(backendStderr || err?.message || ""));
+        if (pyProc) {
+          try { pyProc.kill(); } catch (_) {}
+          pyProc = null;
+        }
+        if (!portBusy) throw err;
+        attemptPort = backendPort + 1;
+      }
+    }
+    if (!started) {
+      throw new Error("Backend failed to start after trying multiple ports.");
+    }
     createWindow();
     sendUpdateState();
     checkForUpdates();
