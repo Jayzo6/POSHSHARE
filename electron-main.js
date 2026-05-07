@@ -344,11 +344,26 @@ function setupAutoUpdater() {
   });
 }
 
+function stopBackendProcess() {
+  if (!pyProc) return;
+  const pid = pyProc.pid;
+  try {
+    if (process.platform === "win32") {
+      // Kill the full child process tree so no backend child keeps the port open.
+      spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+    } else {
+      pyProc.kill("SIGTERM");
+    }
+  } catch (_) {
+    // Ignore shutdown errors; app is already quitting.
+  } finally {
+    pyProc = null;
+  }
+}
+
 app.on("before-quit", () => {
   app.isQuitting = true;
-  if (pyProc) {
-    pyProc.kill();
-  }
+  stopBackendProcess();
 });
 
 app.whenReady().then(async () => {
@@ -387,5 +402,6 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  stopBackendProcess();
   app.quit();
 });
