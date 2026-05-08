@@ -282,10 +282,16 @@ nav{
   margin-bottom:2px;flex-shrink:0;
 }
 .list-heading{font-size:12px;color:var(--text2)}
+.list-header-actions{
+  display:flex;align-items:center;gap:8px;
+}
 .list-badge{
   font-size:11px;padding:2px 8px;border-radius:20px;
   background:var(--bg4);color:var(--text3);
   font-variant-numeric:tabular-nums;
+}
+.list-header-actions .log-clear:disabled{
+  opacity:0.35;cursor:not-allowed;
 }
 
 .closet-item{
@@ -294,6 +300,9 @@ nav{
   background:var(--bg2);border:1px solid var(--border);border-radius:10px;
   cursor:default;position:relative;overflow:hidden;
   transition:border-color 0.15s,background 0.15s,opacity 0.3s,transform 0.18s,box-shadow 0.18s;
+}
+/* Only on first paint after load — full list re-renders skip this to avoid a “black flash” */
+.closet-item.closet-enter{
   animation:item-in 0.22s ease both;
 }
 @keyframes item-in{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
@@ -582,6 +591,24 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 .modal-input:focus{border-color:var(--accent2)}
 .modal-actions{display:flex;gap:8px;margin-top:16px}
 .modal-actions .btn{flex:1;padding:10px}
+.modal.modal-update{width:min(520px,94vw)}
+.update-changelog{margin:0 0 14px}
+.update-changelog-label{
+  font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);
+  margin-bottom:6px;
+}
+.update-changelog-body{
+  max-height:min(240px,38vh);
+  overflow-y:auto;
+  font-size:12px;color:var(--text2);
+  line-height:1.55;
+  white-space:pre-wrap;
+  word-break:break-word;
+  padding:12px 14px;
+  background:var(--bg3);
+  border-radius:10px;
+  border:1px solid var(--border);
+}
 .update-banner{
   margin-right:8px;padding:6px 10px;border-radius:999px;
   border:1px solid var(--border2);background:var(--bg2);color:var(--text2);
@@ -723,7 +750,10 @@ nav,.main{position:relative;z-index:1}
       <div class="closet-col" id="closet-col">
         <div class="list-header">
           <span class="list-heading">Closet queue</span>
-          <span class="list-badge" id="list-badge">0</span>
+          <div class="list-header-actions">
+            <span class="list-badge" id="list-badge">0</span>
+            <button type="button" class="log-clear" id="btn-clear-closets" onclick="clearAllClosets()" title="Remove all closets from the queue" disabled>Clear list</button>
+          </div>
         </div>
         <div id="closet-items"></div>
         <div class="empty-q" id="empty-q">
@@ -875,9 +905,13 @@ nav,.main{position:relative;z-index:1}
 
 <!-- App Update Modal -->
 <div class="modal-backdrop" id="update-modal">
-  <div class="modal">
+  <div class="modal modal-update">
     <div class="modal-title">App updates</div>
     <div class="modal-sub" id="update-status-text">Checking for updates...</div>
+    <div class="update-changelog" id="update-changelog-wrap" style="display:none">
+      <div class="update-changelog-label">What&apos;s new</div>
+      <div class="update-changelog-body" id="update-changelog"></div>
+    </div>
     <div class="run-track" style="margin-top:-8px;margin-bottom:12px;">
       <div class="run-fill" id="update-progress" style="width:0%"></div>
     </div>
@@ -959,6 +993,15 @@ function renderUpdateState(state) {
   bar.style.width = `${Math.max(0, Math.min(100, state.percent || 0))}%`;
   if (appVersion && state.currentVersion) appVersion.textContent = `v${state.currentVersion}`;
 
+  const chWrap = document.getElementById('update-changelog-wrap');
+  const chBody = document.getElementById('update-changelog');
+  if (chWrap && chBody) {
+    const notes = state.releaseNotes && String(state.releaseNotes).trim();
+    const showNotes = Boolean(notes) && ['available', 'downloading', 'downloaded'].includes(state.status);
+    chWrap.style.display = showNotes ? 'block' : 'none';
+    chBody.textContent = showNotes ? notes : '';
+  }
+
   btnDownload.style.display = state.status === 'available' ? '' : 'none';
   btnInstall.style.display = state.status === 'downloaded' ? '' : 'none';
 
@@ -1024,7 +1067,7 @@ function handleMsg(msg) {
       break;
     case 'stopped':
       setRunning(false);
-      renderClosets();
+      renderClosets(false);
       break;
     case 'closet_done':
       onClosetDone(msg);
@@ -1032,7 +1075,7 @@ function handleMsg(msg) {
     case 'closets_updated':
       state.targets = msg.targets;
       flash('sv-queue', state.targets.length);
-      renderClosets();
+      renderClosets(false);
       break;
     case 'twofa_required':
       openTwofaModal();
@@ -1055,8 +1098,15 @@ function loadState(msg) {
     if (msg.credentials.username) document.getElementById('inp-user').value = msg.credentials.username;
     if (msg.credentials.remember) document.getElementById('opt-remember').checked = true;
   }
+  if (msg.theme && msg.theme.accent && validHex(msg.theme.accent)) {
+    const a = msg.theme.accent.toLowerCase();
+    applyTheme(a);
+    try {
+      localStorage.setItem(THEME_KEY, a);
+    } catch (e) { /* ignore quota / private mode */ }
+  }
   updateStats(msg.stats || {});
-  renderClosets();
+  renderClosets(true);
   addLog(`Loaded ${state.targets.length} closets from saved session`, 'info');
 }
 
@@ -1075,14 +1125,14 @@ function onClosetDone(msg) {
   flash('sv-done',      msg.completed);
   flash('sv-queue',     msg.queue);
   if (msg.rate) flash('sv-rate', msg.rate);
-  renderClosets();
+  renderClosets(false);
   updateProgress();
 }
 
 // ── Closet rendering ───────────────────────────────────────────────────────
 let activeUser = null;  // updated from log messages heuristically
 
-function renderClosets() {
+function renderClosets(animateEnter = false) {
   const container = document.getElementById('closet-items');
   const empty     = document.getElementById('empty-q');
   const badge     = document.getElementById('list-badge');
@@ -1090,13 +1140,16 @@ function renderClosets() {
   badge.textContent = state.targets.length;
   empty.style.display = state.targets.length ? 'none' : 'flex';
 
+  const enterCls = animateEnter ? ' closet-enter' : '';
+
   container.innerHTML = state.targets.map((t, i) => {
     const initials = t.user.slice(0, 2).toUpperCase();
     const done     = state.done.has(t.user);
     const active   = state.running && activeUser === t.user;
     const cls      = [done ? 'is-done' : '', active ? 'is-active' : ''].join(' ');
     const meta     = done ? '✓ completed' : `max ${t.max} shares`;
-    return `<div class="closet-item ${cls}" style="animation-delay:${Math.min(i*0.025,0.4)}s">
+    const delayAttr = animateEnter ? ` style="animation-delay:${Math.min(i * 0.025, 0.4)}s"` : '';
+    return `<div class="closet-item${enterCls} ${cls}"${delayAttr}>
       <div class="ci-glow"></div>
       <div class="ci-avatar">${initials}</div>
       <div class="ci-info">
@@ -1107,11 +1160,21 @@ function renderClosets() {
       <button class="ci-del" onclick="removeCloset('${t.user}',event)" title="Remove">✕</button>
     </div>`;
   }).join('');
+
+  const clearBtn = document.getElementById('btn-clear-closets');
+  if (clearBtn) clearBtn.disabled = state.targets.length === 0;
 }
 
 function removeCloset(user, e) {
   e.stopPropagation();
   send({ action: 'remove_closet', user });
+}
+
+function clearAllClosets() {
+  if (!state.targets.length) return;
+  if (!confirm('Clear all closets from the queue?')) return;
+  send({ action: 'clear_closets' });
+  addLog('Cleared closet queue', 'info');
 }
 
 // ── Username extraction ────────────────────────────────────────────────────
@@ -1220,7 +1283,7 @@ function addLog(msg, kind = '') {
 
   // Track which closet is active by parsing log messages
   const m = msg.match(/Processing closet.*?:\s+@(\S+)/);
-  if (m) { activeUser = m[1]; updateProgress(); renderClosets(); }
+  if (m) { activeUser = m[1]; updateProgress(); renderClosets(false); }
 }
 
 function clearLog() { document.getElementById('log-scroll').innerHTML = ''; }
@@ -1329,14 +1392,27 @@ function highlightSwatch(color) {
 function saveTheme() {
   const color = document.getElementById('theme-hex').value.trim();
   if (!validHex(color)) { addLog('Invalid color. Use #RRGGBB format.', 'warn'); return; }
-  localStorage.setItem(THEME_KEY, color.toLowerCase());
-  applyTheme(color.toLowerCase());
-  addLog(`Theme saved: ${color.toLowerCase()}`, 'info');
+  const hex = color.toLowerCase();
+  try {
+    localStorage.setItem(THEME_KEY, hex);
+  } catch (e) { /* ignore */ }
+  applyTheme(hex);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    send({ action: 'save_theme', accent: hex });
+  } else {
+    addLog('Theme saved locally; connect to the server to persist across restarts.', 'warn');
+  }
+  addLog(`Theme saved: ${hex}`, 'info');
 }
 
 function resetTheme() {
-  localStorage.removeItem(THEME_KEY);
+  try {
+    localStorage.removeItem(THEME_KEY);
+  } catch (e) { /* ignore */ }
   applyTheme(DEFAULT_ACCENT);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    send({ action: 'reset_theme' });
+  }
   addLog('Theme reset to default purple.', 'info');
 }
 

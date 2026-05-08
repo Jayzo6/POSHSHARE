@@ -38,3 +38,8 @@ def get_credentials_path():
 def get_closets_path():
     """Path to the saved closets list file."""
     return os.path.join(get_app_data_dir(), "last_closets.txt")
+
+
+def get_theme_path():
+    """Path to the saved UI accent color JSON file."""
+    return os.path.join(get_app_data_dir(), "theme.json")

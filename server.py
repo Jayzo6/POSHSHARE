@@ -29,11 +29,11 @@ sys.path.insert(0, str(ROOT))
 try:
     from poshshare.models import ClosetTarget, parse_closets_lines, format_closets_lines
     from poshshare.automation import Sharer
-    from poshshare.app_paths import get_closets_path, get_credentials_path
+    from poshshare.app_paths import get_closets_path, get_credentials_path, get_theme_path
 except ImportError:
     from models import ClosetTarget, parse_closets_lines, format_closets_lines
     from automation import Sharer
-    from app_paths import get_closets_path, get_credentials_path
+    from app_paths import get_closets_path, get_credentials_path, get_theme_path
 
 import json as _json
 
@@ -315,6 +315,47 @@ def _save_credentials(data: dict):
         _json.dump(existing, f, indent=2)
 
 
+_DEFAULT_ACCENT = "#b06bff"
+
+
+def _valid_theme_hex(v: str) -> bool:
+    if not v or not isinstance(v, str):
+        return False
+    s = v.strip()
+    return len(s) == 7 and s.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in s[1:])
+
+
+def _load_theme_accent() -> str:
+    """Return saved accent hex or the default (matches dashboard DEFAULT_ACCENT)."""
+    path = get_theme_path()
+    if not os.path.exists(path):
+        return _DEFAULT_ACCENT
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = _json.load(f)
+        accent = (data.get("accent") or "").strip()
+        if _valid_theme_hex(accent):
+            return accent.lower()
+    except Exception:
+        pass
+    return _DEFAULT_ACCENT
+
+
+def _save_theme_accent(accent: str):
+    path = get_theme_path()
+    with open(path, "w", encoding="utf-8") as f:
+        _json.dump({"accent": accent.lower()}, f, indent=2)
+
+
+def _reset_theme_file():
+    path = get_theme_path()
+    if os.path.isfile(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
 # ── WebSocket endpoint ────────────────────────────────────────────────────────
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
@@ -336,6 +377,7 @@ async def websocket_endpoint(ws: WebSocket):
             "completed": len(bot.completed),
         },
         "running": bot.running,
+        "theme": {"accent": _load_theme_accent()},
     }))
 
     try:
@@ -394,6 +436,14 @@ async def _handle_message(msg: dict):
 
     elif action == "twofa_response":
         bot.receive_twofa(msg.get("code", ""))
+
+    elif action == "save_theme":
+        accent = (msg.get("accent") or "").strip()
+        if _valid_theme_hex(accent):
+            _save_theme_accent(accent)
+
+    elif action == "reset_theme":
+        _reset_theme_file()
 
     elif action == "save_credentials":
         creds = {}

@@ -16,8 +16,31 @@ let updateState = {
   currentVersion: app.getVersion(),
   latestVersion: null,
   percent: 0,
-  error: null
+  error: null,
+  releaseNotes: null
 };
+
+function normalizeReleaseNotes(info) {
+  if (!info || info.releaseNotes == null || info.releaseNotes === "") return "";
+  const n = info.releaseNotes;
+  if (typeof n === "string") return n.trim();
+  if (Array.isArray(n)) {
+    return n
+      .map((block) => {
+        if (typeof block === "string") return block;
+        if (block && typeof block === "object") {
+          const note = block.note || block.Note || "";
+          const ver = block.version || block.Version;
+          if (ver && note) return `${ver}\n${note}`;
+          return note;
+        }
+        return "";
+      })
+      .filter((s) => String(s).trim().length)
+      .join("\n\n");
+  }
+  return "";
+}
 
 function getDashboardUrl() {
   return `http://127.0.0.1:${backendPort}`;
@@ -69,7 +92,8 @@ function checkForUpdates() {
     status: "checking",
     message: "Checking for updates...",
     percent: 0,
-    error: null
+    error: null,
+    releaseNotes: null
   });
   autoUpdater.checkForUpdates().catch((err) => {
     setUpdateState({
@@ -276,7 +300,8 @@ function setupAutoUpdater() {
       message: `Update ${info.version} is available.`,
       latestVersion: info.version,
       percent: 0,
-      error: null
+      error: null,
+      releaseNotes: normalizeReleaseNotes(info) || null
     });
   });
 
@@ -286,7 +311,8 @@ function setupAutoUpdater() {
       message: "You're on the latest version.",
       latestVersion: app.getVersion(),
       percent: 100,
-      error: null
+      error: null,
+      releaseNotes: null
     });
   });
 
@@ -305,7 +331,8 @@ function setupAutoUpdater() {
       message: `Update ${info.version} is ready to install.`,
       latestVersion: info.version,
       percent: 100,
-      error: null
+      error: null,
+      releaseNotes: normalizeReleaseNotes(info) || updateState.releaseNotes || null
     });
   });
 

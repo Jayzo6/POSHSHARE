@@ -1,6 +1,6 @@
 {
   "name": "poshshare-desktop",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "private": true,
   "description": "Electron wrapper for Poshshare dashboard",
   "main": "electron-main.js",
